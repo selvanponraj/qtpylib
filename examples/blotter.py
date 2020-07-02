@@ -27,5 +27,5 @@ class MainBlotter(Blotter):
 
 # ===========================================
 if __name__ == "__main__":
-    blotter = MainBlotter()
+    blotter = MainBlotter(ibport=7497, dbuser='autotrade', dbpass='Demo1234',orderbook=True)
     blotter.run()

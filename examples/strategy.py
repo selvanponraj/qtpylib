@@ -105,8 +105,6 @@ class TestStrategy(Algo):
         bar = instrument.get_bars(lookback=1, as_dict=True)
         print("BAR:", bar)
 
-
-
 # ===========================================
 if __name__ == "__main__":
     # get most active ES contract to trade
@@ -114,9 +112,10 @@ if __name__ == "__main__":
     print("Active month for ES is:", ACTIVE_MONTH)
 
     strategy = TestStrategy(
-        instruments=[("ES", "FUT", "GLOBEX", "USD", ACTIVE_MONTH, 0.0, "")],
+        instruments=[("ES", "FUT", "GLOBEX", "USD", 202009, 0.0, "")],
         resolution="1T",
         tick_window=10,
-        bar_window=10
+        bar_window=10,
+        ibport=7497
     )
     strategy.run()
