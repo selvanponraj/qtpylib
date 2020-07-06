@@ -336,6 +336,8 @@ class Algo(Broker):
                 continuous=self.continuous
             )
             history = history[history.index >= self.backtest_start]
+            if self.backtest_end:
+                history = history[history.index <= self.backtest_end]
 
         elif not self.blotter_args["dbskip"] and (
                 self.backtest or self.preload):

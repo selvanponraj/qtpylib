@@ -33,7 +33,6 @@ import freqtrade.vendor.qtpylib.indicators as qtpylib
 
 
 # from qtpylib import talib_indicators as ta
-#
 # from qtpylib import indicators as qtpylib
 
 
@@ -61,8 +60,8 @@ class Strategy002(Algo):
         you are using. Let uncomment only the indicator you are using in your strategies
         or your hyperopt configuration, otherwise you will waste your memory and CPU usage.
         """
-
         # Stoch
+
         stoch = ta.STOCH(dataframe)
         dataframe['slowk'] = stoch['slowk']
 
@@ -80,10 +79,13 @@ class Strategy002(Algo):
         # SAR Parabol
         dataframe['sar'] = ta.SAR(dataframe)
 
+
         # Hammer: values [0, 100]
         dataframe['CDLHAMMER'] = ta.CDLHAMMER(dataframe)
 
+
         return dataframe
+
 
     def populate_buy_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
@@ -138,21 +140,94 @@ class Strategy002(Algo):
         pass
 
     # ---------------------------------------
+    # def on_bar(self, instrument):
+    #     # get instrument history
+    #     bars = instrument.get_bars()
+    #     # print(bars)
+    #     # # make sure we have at least 20 bars to work with
+    #     # if len(bars) < 20:
+    #     #     return
+    #
+    #     indicators = self.populate_indicators(bars,None)
+    #     bar = instrument.get_bars(lookback=1, as_dict=True)
+    #
+    #
+    #     buy_signal = self.populate_buy_trend(indicators,None)
+    #     if not np.isnan(buy_signal['buy'].iloc[-1]):
+    #         # get OHLCV bars
+    #         print('BUY::::::::::::')
+    #         print("BAR:", bar)
+    #         # send a buy signal
+    #         instrument.buy(1)
+    #         # record values for future analysis
+    #         self.record(ma_buy=1)
+    #
+    #
+    #     # sell_signal = self.populate_sell_trend(indicators,None)
+    #     # if not np.isnan(buy_signal['sell'].iloc[-1]):
+    #     #     print('SELL::::::::::::')
+    #     #     print("BAR:", bar)
+    #     #     # send a buy signal
+    #     #     instrument.sell(1)
+    #     #
+    #     #     # record values for future analysis
+    #     #     self.record(ma_sell=1)
+
     def on_bar(self, instrument):
         # nothing exiting here...
+
         bars = instrument.get_bars()
         indicators = self.populate_indicators(bars,None)
-        # buy_signal = self.populate_buy_trend(indicators,None)
+
+        # Place Orders...
+        bar = instrument.get_bars(lookback=1, as_dict=True)
+
+        # get current position data
+        positions = instrument.get_positions()
+
+        buy_signal = self.populate_buy_trend(indicators, None)
         sell_signal = self.populate_sell_trend(indicators,None)
 
-        # # print("Buy Signal :")
-        # print(buy_signal)
-        print("Sell Signal :")
-        print(sell_signal)
-        # Place Order
-        bar = instrument.get_bars(lookback=1, as_dict=True)
-        # get OHLCV bars
-        print("BAR:", bar)
+        direction=''
+        # if not instrument.pending_orders and positions["position"] == 0:
+        if not np.isnan(buy_signal['buy'].iloc[-1]):
+            direction='BUY'
+        elif not np.isnan(sell_signal['sell'].iloc[-1]):
+            direction='SELL'
+
+
+
+        # get position direction
+        if instrument.positions['position'] > 0 and direction =='BUY':
+            # already buy order in place
+            print('Already BUY order in Place - So not placing order - Position - ' + str(instrument.positions['position']))
+            pass
+
+        if instrument.positions['position'] < 0 and direction =='SELL':
+            print('Already SELL order in Place - So not placing order - Position - ' + str(instrument.positions['position']))
+            pass
+
+        if instrument.positions['position'] > 0 and direction =='SELL':
+            print('exiting BUY position - placing new SELL order - Position - ' + str(instrument.positions['position']))
+            instrument.exit()
+            instrument.sell(1)
+            self.record(TD_SS_SELL=1)
+
+        if instrument.positions['position'] < 0 and direction =='BUY':
+            print('exiting SELL position - placing new BUY order - Position - ' + str(instrument.positions['position']))
+            instrument.exit()
+            instrument.buy(1)
+            self.record(TD_SS_BUY=1)
+
+        if not instrument.pending_orders and instrument.positions["position"] == 0:
+            if direction =='BUY':
+                print("BUY Signal and No Position - Placing Order")
+                instrument.buy(1)
+                self.record(TD_SS_BUY=1)
+            elif direction =='SELL':
+                print("Sell Signal and No Position - Placing Order")
+                instrument.sell(1)
+                self.record(TD_SS_SELL=1)
 
 # ===========================================
 if __name__ == "__main__":
@@ -162,9 +237,12 @@ if __name__ == "__main__":
 
     strategy = Strategy002(
         instruments=[("ES", "FUT", "GLOBEX", "USD", 202009, 0.0, "")],
-        resolution="1T",
-        tick_window=10,
-        bar_window=10,
-        ibport=7497
+        resolution="1H",
+        backtest=True,
+        ibport=7497,
+        start='2020-05-01',
+        end='2020-05-31',
+        data='/Users/sponraj/Desktop/History_Data/ES/Under_Test',
+        output='./portfolio.csv'
     )
     strategy.run()

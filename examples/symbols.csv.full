@@ -1,5 +1,7 @@
 symbol,sec_type,exchange,currency,expiry,strike,opt_type
 AAPL,STK,SMART,USD,,0.0,
+SPY,STK,SMART,USD,,0.0,
+
 ES,FUT,GLOBEX,USD,202009,0.0,
 SPX,IDX,CBOE,USD,,0.0,
 NFFX,OPT,SMART,USD,20200717,16.3,PUT

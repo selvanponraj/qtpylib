@@ -101,9 +101,51 @@ class TestStrategy(Algo):
 
     # ---------------------------------------
     def on_bar(self, instrument):
-        # nothing exiting here...
+        # continue ...
+        # # nothing exiting here...
+        # bar = instrument.get_bars(lookback=1, as_dict=True)
+        # print("BAR:", bar)
+        # increase counter and do nothing if nor 10th tick
+        self.count += 1
+
+        if self.count % 5 != 0:
+            return
+
+        # continue ...
+
+        # get last tick dict
         bar = instrument.get_bars(lookback=1, as_dict=True)
         print("BAR:", bar)
+        if instrument.positions['position']:
+            print(instrument.symbol, "still in position. Exiting...")
+            instrument.exit()
+        else:
+            if instrument.pending_orders:
+                print(instrument.symbol, "has a pending order. Wait...")
+            else:
+                # random order direction
+                direction = random.choice(["BUY", "SELL"])
+                print(instrument.symbol,
+                      'not in position. Sending a bracket ', direction, 'order...')
+
+                if direction == "BUY":
+                    target = bar['close'] + 0.5
+                    stoploss = bar['close'] - 0.5
+                else:
+                    target = bar['close'] - 0.5
+                    stoploss = bar['close'] + 0.5
+
+                instrument.order(direction, 1,
+                                 limit_price=bar['close'],
+                                 target=target,
+                                 initial_stop=stoploss,
+                                 trail_stop_at=0,
+                                 trail_stop_by=0,
+                                 expiry=5
+                                 )
+
+                # record action
+                self.record(take_action=1)
 
 # ===========================================
 if __name__ == "__main__":
@@ -111,11 +153,18 @@ if __name__ == "__main__":
     ACTIVE_MONTH = futures.get_active_contract("ES")
     print("Active month for ES is:", ACTIVE_MONTH)
 
+    # --backtest true --start # 2019-12-01 --end 2019-12-02 --data /Users/sponraj/Desktop/my_data_csv --output ./portfolio.csv
+
     strategy = TestStrategy(
         instruments=[("ES", "FUT", "GLOBEX", "USD", 202009, 0.0, "")],
-        resolution="1T",
+        resolution="1H",
         tick_window=10,
         bar_window=10,
-        ibport=7497
+        ibport=7497,
+        backtest = True,
+        start =  '2019-12-15',
+        end= '2019-12-31',
+        data='/Users/sponraj/Desktop/my_data_csv/',
+        output='./portfolio.csv'
     )
     strategy.run()

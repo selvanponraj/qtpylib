@@ -30,7 +30,6 @@ from qtpylib import futures
 
 import talib.abstract as ta
 import freqtrade.vendor.qtpylib.indicators as qtpylib
-import numpy
 
 # from qtpylib import talib_indicators as ta
 #
@@ -100,6 +99,8 @@ class Strategy003(Algo):
         :param dataframe: DataFrame
         :return: DataFrame with buy column
         """
+        # print("Buy: RSI ")
+        # print (dataframe['rsi'])
         dataframe.loc[
             (
                     (dataframe['rsi'] < 28) &
@@ -124,6 +125,11 @@ class Strategy003(Algo):
         :param dataframe: DataFrame
         :return: DataFrame with buy column
         """
+        # print("SELL: RSI ")
+        # print(dataframe['sar'])
+        # print(dataframe['close'])
+        # print(dataframe['fisher_rsi'])
+
         dataframe.loc[
             (
                     (dataframe['sar'] > dataframe['close']) &
@@ -156,19 +162,29 @@ class Strategy003(Algo):
     # ---------------------------------------
     def on_bar(self, instrument):
         # nothing exiting here...
-        bars = instrument.get_bars()
-        indicators = self.populate_indicators(bars,None)
-        buy_signal = self.populate_buy_trend(indicators,None)
-        sell_signal = self.populate_sell_trend(indicators,None)
-
-        print("Buy Signal :")
-        print(buy_signal)
-        print("Sell Signal :")
-        print(sell_signal)
-        # Place Order
         bar = instrument.get_bars(lookback=1, as_dict=True)
-        # get OHLCV bars
-        print("BAR:", bar)
+        bars = instrument.get_bars()
+        indicators = self.populate_indicators(bars, None)
+
+        buy_signal = self.populate_buy_trend(indicators, None)
+        if not np.isnan(buy_signal['buy'].iloc[-1]):
+            # get OHLCV bars
+            print('BUY::::::::::::')
+            print("BAR:", bar)
+            # send a buy signal
+            instrument.buy(1)
+            # record values for future analysis
+            self.record(TD_SS_BUY=1)
+
+        sell_signal = self.populate_sell_trend(indicators, None)
+        if not np.isnan(buy_signal['sell'].iloc[-1]):
+            print('SELL::::::::::::')
+            print("BAR:", bar)
+            # send a buy signal
+            instrument.sell(1)
+
+            # record values for future analysis
+            self.record(TD_SS_SELL=1)
 
 # ===========================================
 if __name__ == "__main__":
@@ -178,9 +194,12 @@ if __name__ == "__main__":
 
     strategy = Strategy003(
         instruments=[("ES", "FUT", "GLOBEX", "USD", 202009, 0.0, "")],
-        resolution="1T",
-        tick_window=10,
-        bar_window=10,
-        ibport=7497
+        resolution="1H",
+        backtest=True,
+        ibport=7497,
+        start='2020-05-01',
+        end='2020-05-10',
+        data='/Users/sponraj/Desktop/History_Data/ES/Under_Test',
+        output='./portfolio.pkl'
     )
     strategy.run()

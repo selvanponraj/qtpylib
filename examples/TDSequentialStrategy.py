@@ -30,7 +30,7 @@ from qtpylib import futures
 
 import talib.abstract as ta
 import freqtrade.vendor.qtpylib.indicators as qtpylib
-import numpy
+
 
 # from qtpylib import talib_indicators as ta
 #
@@ -156,21 +156,60 @@ class Strategy003(Algo):
     # ---------------------------------------
     def on_bar(self, instrument):
         # nothing exiting here...
+
         bars = instrument.get_bars()
         indicators = self.populate_indicators(bars,None)
-        buy_signal = self.populate_buy_trend(indicators,None)
+
+        # Place Orders...
+        bar = instrument.get_bars(lookback=1, as_dict=True)
+
+        # get current position data
+        positions = instrument.get_positions()
+
+        buy_signal = self.populate_buy_trend(indicators, None)
         sell_signal = self.populate_sell_trend(indicators,None)
 
-        print("Buy Signal :")
-        print(buy_signal)
-        print("Sell Signal :")
-        print(sell_signal)
-        # Place Order
-        bar = instrument.get_bars(lookback=1, as_dict=True)
-        # get OHLCV bars
-        print("BAR:", bar)
+        direction=None
+        # if not instrument.pending_orders and positions["position"] == 0:
+        if not np.isnan(buy_signal['buy'].iloc[-1]):
+            direction='BUY'
+        elif not np.isnan(sell_signal['sell'].iloc[-1]):
+            direction='SELL'
 
+        if not instrument.pending_orders and positions["position"] == 0:
+            if direction is not None and direction=='BUY':
+                instrument.buy(1)
+                self.record(TD_SS_BUY=1)
+            elif direction is not None and direction=='SELL':
+                instrument.sell(1)
+                self.record(TD_SS_SELL=1)
+
+        print("Position")
+        print(instrument.positions['position'])
+        # get position direction
+        if instrument.positions['position'] > 0 and direction =='BUY':
+            # already buy order in place
+            print('Already BUY order in Place - So not placing order - Position - ' + str(instrument.positions['position']))
+            pass
+
+        if instrument.positions['position'] < 0 and direction =='SELL':
+            print('Already SELL order in Place - So not placing order - Position - ' + str(instrument.positions['position']))
+            pass
+
+        if instrument.positions['position'] > 0 and direction =='SELL':
+            print('exiting BUY position - placing new SELL order - Position - ' + str(instrument.positions['position']))
+            instrument.exit()
+            instrument.sell(1)
+            self.record(TD_SS_SELL=1)
+
+        if instrument.positions['position'] < 0 and direction =='BUY':
+            print('exiting SELL position - placing new BUY order - Position - ' + str(instrument.positions['position']))
+
+            instrument.exit()
+            instrument.buy(1)
+            self.record(TD_SS_BUY=1)
 # ===========================================
+
 if __name__ == "__main__":
     # get most active ES contract to trade
     ACTIVE_MONTH = futures.get_active_contract("ES")
@@ -178,9 +217,12 @@ if __name__ == "__main__":
 
     strategy = Strategy003(
         instruments=[("ES", "FUT", "GLOBEX", "USD", 202009, 0.0, "")],
-        resolution="1T",
-        tick_window=10,
-        bar_window=10,
-        ibport=7497
+        resolution="1H",
+        backtest=True,
+        ibport=7497,
+        start='2020-05-03',
+        end='2020-05-04',
+        data='/Users/sponraj/Desktop/History_Data/ES/Under_Test',
+        output='./portfolio.csv'
     )
     strategy.run()
