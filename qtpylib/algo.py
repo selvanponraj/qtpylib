@@ -335,6 +335,7 @@ class Algo(Broker):
                 tz=self.timezone,
                 continuous=self.continuous
             )
+            # SELVAN
             history = history[history.index >= self.backtest_start]
             if self.backtest_end:
                 history = history[history.index <= self.backtest_end]
