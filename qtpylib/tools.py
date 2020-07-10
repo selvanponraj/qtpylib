@@ -694,7 +694,7 @@ def resample(data, resolution="1T", tz=None, ffill=True, dropna=False,
         start_date = str(data.groupby(["symbol"])[
                          ['_idx_']].min().max().values[-1]).replace('T', ' ')
         end_date = str(data.groupby(["symbol"])[
-                       ['_idx_']].max().min().values[-1]).replace('T', ' ')
+                       ['_idx_']].max().max().values[-1]).replace('T', ' ')
 
         data = data[(data.index <= end_date)].drop_duplicates(
             subset=['_idx_', 'symbol', 'symbol_group', 'asset_class'],

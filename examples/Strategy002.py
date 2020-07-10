@@ -174,16 +174,17 @@ class Strategy002(Algo):
     #     #     self.record(ma_sell=1)
 
     def on_bar(self, instrument):
-        # nothing exiting here...
+        # Place Orders...
+        bar = instrument.get_bars(lookback=1, as_dict=True)
+        print("BAR:", bar)
 
         bars = instrument.get_bars()
         indicators = self.populate_indicators(bars,None)
 
-        # Place Orders...
-        bar = instrument.get_bars(lookback=1, as_dict=True)
-
         # get current position data
         positions = instrument.get_positions()
+
+        print('Positions :', positions)
 
         buy_signal = self.populate_buy_trend(indicators, None)
         sell_signal = self.populate_sell_trend(indicators,None)
@@ -195,7 +196,7 @@ class Strategy002(Algo):
         elif not np.isnan(sell_signal['sell'].iloc[-1]):
             direction='SELL'
 
-
+        print('Direction :', direction)
 
         # get position direction
         if instrument.positions['position'] > 0 and direction =='BUY':
@@ -231,18 +232,28 @@ class Strategy002(Algo):
 
 # ===========================================
 if __name__ == "__main__":
-    # get most active ES contract to trade
-    ACTIVE_MONTH = futures.get_active_contract("ES")
-    print("Active month for ES is:", ACTIVE_MONTH)
-
-    strategy = Strategy002(
-        instruments=[("ES", "FUT", "GLOBEX", "USD", 202009, 0.0, "")],
-        resolution="1H",
-        backtest=True,
-        ibport=7497,
-        start='2020-05-01',
-        end='2020-05-31',
-        data='/Users/sponraj/Desktop/History_Data/ES/Under_Test',
-        output='./portfolio.csv'
-    )
-    strategy.run()
+    # # get most active ES contract to trade
+    # ACTIVE_MONTH = futures.get_active_contract("ES")
+    # print("Active month for ES is:", ACTIVE_MONTH)
+    #
+    # strategy = Strategy002(
+    #     instruments=[("ES", "FUT", "GLOBEX", "USD", 202009, 0.0, "")],
+    #     resolution="5T",
+    #     ibport=7497
+    # )
+    #
+    # # strategy = Strategy002(
+    # #     instruments=[("ES", "FUT", "GLOBEX", "USD", 202009, 0.0, "")],
+    # #     resolution="1H",
+    # #     backtest=True,
+    # #     ibport=7497,
+    # #     start='2020-05-01',
+    # #     end='2020-05-31',
+    # #     data='/Users/sponraj/Desktop/History_Data/ES/Under_Test',
+    # #     output='./portfolio.csv'
+    # # )
+    # strategy.run()
+    instruments = [("ES", "FUT", "GLOBEX", "USD", 202009, 0.0, "")]
+    print(lse_df)
+    instruments = lse_df.to_records(index=False).tolist()
+    print(instruments)
