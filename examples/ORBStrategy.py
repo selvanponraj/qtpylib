@@ -177,49 +177,50 @@ class ORBStrategy(Algo):
 
         # Place Orders...
         bar = instrument.get_bars(lookback=1, as_dict=True)
-        print("BAR:", bar)
+        # print("BAR:", bar)
+        instrument_df = orb_results[orb_results['symbol'] == instrument.symbol]
+        # print("Instrument:", instrument_df)
 
-        instrument_df = orb_results[orb_results['symbol'] == "IMB"]
-        print(instrument_df)
         bar_close = bar['close']
         high = instrument_df['high'].values[0]
         low = instrument_df['low'].values[0]
         qty = instrument_df['qty'].values[0]
 
         direction ='NOT KNOWN'
-
         if bar['close'] > high:
             direction='BUY'
         if bar['close'] < low:
             direction='SELL'
 
-        print(high, bar_close,low,direction)
-
         # get position direction
         if instrument.positions['position'] > 0 and direction =='BUY':
             # already buy order in place
-            print('Already BUY order in Place - So not placing order - Position - ' + str(instrument.positions['position']))
+            print('Already BUY order in Place - So not placing order - Symbol :', instrument.symbol, 'Position: ', str(instrument.positions['position']))
             pass
 
         if instrument.positions['position'] < 0 and direction =='SELL':
-            print('Already SELL order in Place - So not placing order - Position - ' + str(instrument.positions['position']))
+            print('Already SELL order in Place - So not placing order - Symbol :', instrument.symbol, 'Position: ', str(instrument.positions['position']))
             pass
 
         if not instrument.pending_orders and instrument.positions["position"] == 0:
             if direction =='BUY':
                 print("BUY Signal and No Position - Placing Order")
+                print(instrument.symbol,high, bar_close,low,direction)
                 instrument.order(direction, qty, limit_price=high, initial_stop=high, stop_limit=True)
                 self.record(ORB_BUY=qty)
             elif direction =='SELL':
                 print("Sell Signal and No Position - Placing Order")
+                print(instrument.symbol,high, bar_close,low,direction)
                 instrument.order(direction, qty, limit_price=high, initial_stop=high, stop_limit=True)
                 self.record(ORB_SELL=qty)
         elif instrument.positions['position'] > 0 and direction =='SELL':
             print('exiting BUY position - placing new SELL order - Position - ' + str(instrument.positions['position']))
+            print(instrument.symbol, high, bar_close, low, direction)
             instrument.order(direction, qty, limit_price=high, initial_stop=high, stop_limit=True)
             self.record(ORB_SELL=qty)
         elif instrument.positions['position'] < 0 and direction =='BUY':
             print('exiting SELL position - placing new BUY order - Position - ' + str(instrument.positions['position']))
+            print(instrument.symbol, high, bar_close, low, direction)
             instrument.order(direction, qty, limit_price=high, initial_stop=high, stop_limit=True)
             self.record(ORB_BUY=qty)
 
@@ -236,12 +237,14 @@ if __name__ == "__main__":
     # )
     #
 
-    orb_results = pd.read_csv('~/auto_trade/ezibpy/scan_results/uk_orb_ib_result.csv')
+    # orb_results = pd.read_csv('~/auto_trade/ezibpy/scan_results/uk_orb_ib_result.csv')
+    orb_results = pd.read_csv('~/auto_trade/ezibpy/scan_results/us_orb_ib_result.csv')
     symbols = list(orb_results['symbol'])
 
     instruments = []
     for symbol in symbols:
-        instruments.append( (symbol, "STK", "LSE", "GBP", "", 0.0, ""),)
+        # instruments.append( (symbol, "STK", "LSE", "GBP", "", 0.0, ""),)
+        instruments.append((symbol, "STK", "SMART", "USD", "", 0.0, ""))
 
     print(instruments)
 
