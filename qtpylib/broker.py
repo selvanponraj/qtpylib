@@ -637,6 +637,20 @@ class Broker():
             orderId = self.ibConn.placeOrder(contract, order)
             self.log_broker.debug('PLACE ORDER: %s %s', tools.contract_to_dict(
                 contract), tools.order_to_dict(order))
+        elif stop_limit:
+            bracket = False
+            # stop limit order
+            order = self.ibConn.createStopOrder(order_quantity, price=limit_price, stop=limit_price,
+                                                stop_limit=True,
+                                                fillorkill=fillorkill,
+                                                iceberg=iceberg,
+                                                tif=tif
+                                            )
+
+            orderId = self.ibConn.placeOrder(contract, order)
+            self.log_broker.debug('PLACE ORDER: %s %s', tools.contract_to_dict(
+                contract), tools.order_to_dict(order))
+
         else:
             # bracket order
             order = self.ibConn.createBracketOrder(contract, order_quantity,

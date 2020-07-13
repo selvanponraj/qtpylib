@@ -45,7 +45,7 @@ if sys.version_info < (3, 4):
 
 # =============================================
 # Configure logging
-tools.createLogger(__name__)
+tools.createLogger(__name__,level=logging.DEBUG)
 
 # =============================================
 # set up threading pool
