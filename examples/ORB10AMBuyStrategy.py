@@ -18,17 +18,107 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import random
+
+import numpy as np  # noqa
 import pandas as pd  # noqa
+from pandas import DataFrame
+
 from qtpylib.algo import Algo
+from qtpylib import futures
+from datetime import timedelta
+import datetime
+from pytz import timezone
+
+import talib.abstract as ta
+import freqtrade.vendor.qtpylib.indicators as qtpylib
 
 
-class ORB10AMBuyStrategy(Algo):
+# from qtpylib import talib_indicators as ta
+# from qtpylib import indicators as qtpylib
+
+
+class ORBStrategy(Algo):
+    """
+    Example: This Strategy buys/sells single contract of the
+    S&P E-mini Futures (ES) every 10th tick with a +/- 0.5
+    tick target/stop using LIMIT order.
+
+    If still in position for next 5 ticks, an exit order is issued.
+    """
+
     count = 0
 
     # ---------------------------------------
     def on_start(self):
         """ initilize tick counter """
         self.count = 0
+
+    def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """
+        Adds several different TA indicators to the given DataFrame
+
+        Performance Note: For the best performance be frugal on the number of indicators
+        you are using. Let uncomment only the indicator you are using in your strategies
+        or your hyperopt configuration, otherwise you will waste your memory and CPU usage.
+        """
+        # Stoch
+
+        stoch = ta.STOCH(dataframe)
+        dataframe['slowk'] = stoch['slowk']
+
+        # RSI
+        dataframe['rsi'] = ta.RSI(dataframe)
+
+        # Inverse Fisher transform on RSI, values [-1.0, 1.0] (https://goo.gl/2JGGoy)
+        rsi = 0.1 * (dataframe['rsi'] - 50)
+        dataframe['fisher_rsi'] = (np.exp(2 * rsi) - 1) / (np.exp(2 * rsi) + 1)
+
+        # Bollinger bands
+        bollinger = qtpylib.bollinger_bands(qtpylib.typical_price(dataframe), window=20, stds=2)
+        dataframe['bb_lowerband'] = bollinger['lower']
+
+        # SAR Parabol
+        dataframe['sar'] = ta.SAR(dataframe)
+
+
+        # Hammer: values [0, 100]
+        dataframe['CDLHAMMER'] = ta.CDLHAMMER(dataframe)
+
+
+        return dataframe
+
+
+    def populate_buy_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """
+        Based on TA indicators, populates the buy signal for the given dataframe
+        :param dataframe: DataFrame
+        :return: DataFrame with buy column
+        """
+        dataframe.loc[
+            (
+                (dataframe['rsi'] < 30) &
+                (dataframe['slowk'] < 20) &
+                (dataframe['bb_lowerband'] > dataframe['close']) &
+                (dataframe['CDLHAMMER'] == 100)
+            ),
+            'buy'] = 1
+
+        return dataframe
+
+    def populate_sell_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """
+        Based on TA indicators, populates the sell signal for the given dataframe
+        :param dataframe: DataFrame
+        :return: DataFrame with buy column
+        """
+        dataframe.loc[
+            (
+                (dataframe['sar'] > dataframe['close']) &
+                (dataframe['fisher_rsi'] > 0.3)
+            ),
+            'sell'] = 1
+        return dataframe
 
     # ---------------------------------------
     def on_quote(self, instrument):
@@ -46,17 +136,63 @@ class ORB10AMBuyStrategy(Algo):
 
     # ---------------------------------------
     def on_tick(self, instrument):
+        # tick = instrument.get_tick()
+        # # get OHLCV bars
+        # print("TICK:", tick)
         pass
 
+    # ---------------------------------------
+    # def on_bar(self, instrument):
+    #     # get instrument history
+    #     bars = instrument.get_bars()
+    #     # print(bars)
+    #     # # make sure we have at least 20 bars to work with
+    #     # if len(bars) < 20:
+    #     #     return
+    #
+    #     indicators = self.populate_indicators(bars,None)
+    #     bar = instrument.get_bars(lookback=1, as_dict=True)
+    #
+    #
+    #     buy_signal = self.populate_buy_trend(indicators,None)
+    #     if not np.isnan(buy_signal['buy'].iloc[-1]):
+    #         # get OHLCV bars
+    #         print('BUY::::::::::::')
+    #         print("BAR:", bar)
+    #         # send a buy signal
+    #         instrument.buy(1)
+    #         # record values for future analysis
+    #         self.record(ma_buy=1)
+    #
+    #
+    #     # sell_signal = self.populate_sell_trend(indicators,None)
+    #     # if not np.isnan(buy_signal['sell'].iloc[-1]):
+    #     #     print('SELL::::::::::::')
+    #     #     print("BAR:", bar)
+    #     #     # send a buy signal
+    #     #     instrument.sell(1)
+    #     #
+    #     #     # record values for future analysis
+    #     #     self.record(ma_sell=1)
+
     def on_bar(self, instrument):
+
         # Place Orders...
-        bar = instrument.get_bars(lookback=1, as_dict=True)
+        bar = instrument.get_bar()
+        print("BAR:", bar)
         instrument_df = orb_results[orb_results['symbol'] == instrument.symbol]
-        bars = instrument.get_bars(lookback=3)
-        print (bars)
+        # print("Instrument:", instrument_df)
+        bars = strategy.get_history(instrument.symbol, bar_start_time, resolution=resolution)
+        print(bars)
+
         bars_total_volume = bars['volume'].sum()
-        avg_volume = round(bars_total_volume/3)
-        print (avg_volume)
+        if len(bars) > 0:
+            avg_volume = round(bars_total_volume/len(bars))
+        else:
+            avg_volume = bars_total_volume
+
+
+
         bar_close = bar['close']
         high = instrument_df['high'].values[0]
         low = instrument_df['low'].values[0]
@@ -88,8 +224,8 @@ class ORB10AMBuyStrategy(Algo):
                                  limit_price=high,
                                  initial_stop=low,
                                  trail_stop_by=0.5,
-                                 target= high+(high*.01),
-                                 expiry=240)
+                                 target= high+(high-low),
+                                 expiry=14400)
 
                 self.record(ORB_BUY=qty)
             elif direction =='SELL':
@@ -100,9 +236,22 @@ class ORB10AMBuyStrategy(Algo):
                                  limit_price=low,
                                  initial_stop=high,
                                  trail_stop_by=0.5,
-                                 target=low-(low*.01),
-                                 expiry=240)
+                                 target=low-(high-low),
+                                 expiry=14400)
                 self.record(ORB_SELL=qty)
+
+
+        # elif instrument.positions['position'] > 0 and direction =='SELL':
+        #     print('exiting BUY position - placing new SELL order - Position - ' + str(instrument.positions['position']))
+        #     print(instrument.symbol, high, bar_close, low, direction)
+        #     instrument.order(direction, qty)
+        #     self.record(ORB_SELL=qty)
+        # elif instrument.positions['position'] < 0 and direction =='BUY':
+        #     print('exiting SELL position - placing new BUY order - Position - ' + str(instrument.positions['position']))
+        #     print(instrument.symbol, high, bar_close, low, direction)
+        #     instrument.order(direction, qty)
+        #     self.record(ORB_BUY=qty)
+
 # ===========================================
 if __name__ == "__main__":
 
@@ -120,23 +269,41 @@ if __name__ == "__main__":
         except (ValueError, IndexError):
             print('This is not a valid selection. Please enter number between 1 and {}!'.format(i))
 
-    scan_result = market+'_10am-buy_ib_result.csv'
+    scan_result = market+'_10am-buy_alpaca_result.csv'
     orb_results = pd.read_csv('~/auto_trade/ezibpy/scan_results/'+scan_result)
     symbols = list(orb_results['symbol'])
 
+    bar_time_format = '%Y-%m-%d %H:%M:%S.%f'
+    algo_time = timezone('UTC').localize(datetime.datetime.today() - timedelta(days=0))
     instruments = []
     for symbol in symbols:
         if market == 'uk':
             instruments.append((symbol, "STK", "LSE", "GBP", "", 0.0, ""))
+            bar_start_time = algo_time.replace(hour=8).replace(minute=00).replace(second=00).strftime(
+                bar_time_format)
+            bar_end_time = algo_time.replace(hour=9).replace(minute=00).replace(second=00).strftime(
+                bar_time_format)
         elif market == 'us':
             instruments.append((symbol, "STK", "SMART", "USD", "", 0.0, ""))
-
+            bar_start_time = algo_time.replace(hour=14).replace(minute=30).replace(second=00).strftime(
+                bar_time_format)
+            bar_end_time = algo_time.replace(hour=15).replace(minute=30).replace(second=00).strftime(
+                bar_time_format)
     print(instruments)
-
-    strategy = ORB10AMBuyStrategy(
+    resolution = '15T'
+    strategy = ORBStrategy(
         instruments=instruments,
-        resolution="15T",
+        resolution=resolution,
         ibport=4001,
         ibclient=802
     )
-    strategy.run()
+
+    # # # bars = bars[bars.index >= bar_start_time]
+    # # # bars = bars[bars.index <= bar_end_time]
+    # bars = bars = strategy.get_history('D', '2020-07-14', resolution=resolution)
+    # print (bars)
+    # # bars = bars[bars.index >= bar_start_time]
+    # bars = bars[bars.index <= bar_end_time]
+    # print(bars)
+    # strategy.get_instrument()
+    # strategy.run()

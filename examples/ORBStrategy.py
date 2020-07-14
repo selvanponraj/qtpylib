@@ -26,7 +26,9 @@ from pandas import DataFrame
 
 from qtpylib.algo import Algo
 from qtpylib import futures
-
+from datetime import timedelta
+import datetime
+from pytz import timezone
 
 import talib.abstract as ta
 import freqtrade.vendor.qtpylib.indicators as qtpylib
@@ -176,61 +178,66 @@ class ORBStrategy(Algo):
     def on_bar(self, instrument):
 
         # Place Orders...
-        bar = instrument.get_bars(lookback=1, as_dict=True)
+        bar = instrument.get_bar()
         print("BAR:", bar)
         instrument_df = orb_results[orb_results['symbol'] == instrument.symbol]
         # print("Instrument:", instrument_df)
+        bars = strategy.get_history(instrument.symbol, bar_start_time, resolution=resolution)
+        print(bars)
 
-        bars = instrument.get_bars(lookback=3)
-        print (bars)
         bars_total_volume = bars['volume'].sum()
-        avg_volume = round(bars_total_volume/3)
-        print (avg_volume)
+        if len(bars) > 0:
+            avg_volume = round(bars_total_volume / len(bars))
+        else:
+            avg_volume = bars_total_volume
+
         bar_close = bar['close']
         high = instrument_df['high'].values[0]
         low = instrument_df['low'].values[0]
         qty = instrument_df['qty'].values[0]
         volume = bar['volume']
 
-        direction ='NOT KNOWN'
+        direction = 'NOT KNOWN'
         if bar['close'] > high and volume > avg_volume:
-            direction='BUY'
+            direction = 'BUY'
         if bar['close'] < low and volume > avg_volume:
-            direction='SELL'
+            direction = 'SELL'
 
         # get position direction
-        if instrument.positions['position'] > 0 and direction =='BUY':
+        if instrument.positions['position'] > 0 and direction == 'BUY':
             # already buy order in place
-            print('Already BUY order in Place - So not placing order - Symbol :', instrument.symbol, 'Position: ', str(instrument.positions['position']))
+            print('Already BUY order in Place - So not placing order - Symbol :', instrument.symbol, 'Position: ',
+                  str(instrument.positions['position']))
             pass
 
-        if instrument.positions['position'] < 0 and direction =='SELL':
-            print('Already SELL order in Place - So not placing order - Symbol :', instrument.symbol, 'Position: ', str(instrument.positions['position']))
+        if instrument.positions['position'] < 0 and direction == 'SELL':
+            print('Already SELL order in Place - So not placing order - Symbol :', instrument.symbol, 'Position: ',
+                  str(instrument.positions['position']))
             pass
 
         if not instrument.pending_orders and instrument.positions["position"] == 0:
-            if direction =='BUY':
+            if direction == 'BUY':
                 print("BUY Signal and No Position - Placing Order")
-                print(instrument.symbol,high, bar_close,low,direction, volume, avg_volume)
+                print(instrument.symbol, high, bar_close, low, direction, volume, avg_volume)
                 instrument.order(direction,
                                  qty,
                                  limit_price=high,
                                  initial_stop=low,
                                  trail_stop_by=0.5,
-                                 target= high+(high*.01),
-                                 expiry=240)
+                                 target=high + (high - low),
+                                 expiry=14400)
 
                 self.record(ORB_BUY=qty)
-            elif direction =='SELL':
+            elif direction == 'SELL':
                 print("Sell Signal and No Position - Placing Order")
-                print(instrument.symbol,high, bar_close,low,direction, volume, avg_volume)
+                print(instrument.symbol, high, bar_close, low, direction, volume, avg_volume)
                 instrument.order(direction,
                                  qty,
                                  limit_price=low,
                                  initial_stop=high,
                                  trail_stop_by=0.5,
-                                 target=low-(low*.01),
-                                 expiry=240)
+                                 target=low - (high - low),
+                                 expiry=14400)
                 self.record(ORB_SELL=qty)
 
         # elif instrument.positions['position'] > 0 and direction =='SELL':
@@ -265,18 +272,37 @@ if __name__ == "__main__":
     orb_results = pd.read_csv('~/auto_trade/ezibpy/scan_results/'+scan_result)
     symbols = list(orb_results['symbol'])
 
+    bar_time_format = '%Y-%m-%d %H:%M:%S.%f'
+    algo_time = timezone('UTC').localize(datetime.datetime.today() - timedelta(days=0))
     instruments = []
     for symbol in symbols:
         if market == 'uk':
             instruments.append((symbol, "STK", "LSE", "GBP", "", 0.0, ""))
+            bar_start_time = algo_time.replace(hour=8).replace(minute=00).replace(second=00).strftime(
+                bar_time_format)
+            bar_end_time = algo_time.replace(hour=9).replace(minute=00).replace(second=00).strftime(
+                bar_time_format)
         elif market == 'us':
             instruments.append((symbol, "STK", "SMART", "USD", "", 0.0, ""))
+            bar_start_time = algo_time.replace(hour=14).replace(minute=30).replace(second=00).strftime(
+                bar_time_format)
+            bar_end_time = algo_time.replace(hour=15).replace(minute=30).replace(second=00).strftime(
+                bar_time_format)
     print(instruments)
-
+    resolution = '15T'
     strategy = ORBStrategy(
         instruments=instruments,
-        resolution="15T",
+        resolution=resolution,
         ibport=4001,
-        ibclient=801
+        ibclient=800
     )
+
+    # # # bars = bars[bars.index >= bar_start_time]
+    # # # bars = bars[bars.index <= bar_end_time]
+    # bars = bars = strategy.get_history('WPP', bar_start_time, resolution=resolution)
+    # print (bars)
+    # # bars = bars[bars.index >= bar_start_time]
+    # bars = bars[bars.index <= bar_end_time]
+    # print(bars)
+    # strategy.get_instrument()
     strategy.run()
