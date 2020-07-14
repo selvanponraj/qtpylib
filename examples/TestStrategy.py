@@ -176,69 +176,91 @@ class TestStrategy(Algo):
     #     #     self.record(ma_sell=1)
 
     def on_bar(self, instrument):
-
         # Place Orders...
         bar = instrument.get_bar()
         print("BAR:", bar)
-        instrument_df = orb_results[orb_results['symbol'] == instrument.symbol]
-        # print("Instrument:", instrument_df)
-        bars = strategy.get_history(instrument.symbol, bar_start_time, resolution=resolution)
-        print(bars)
 
+        # bars = instrument.get_bars(lookback=100)
+        bars = strategy.get_history(instrument.symbol, bar_start_time, resolution=resolution)
+        print('full bars:')
+        print(bars)
         bars_total_volume = bars['volume'].sum()
         if len(bars) > 0:
             avg_volume = round(bars_total_volume / len(bars))
         else:
             avg_volume = bars_total_volume
 
-        bar_close = bar['close']
-        high = instrument_df['high'].values[0]
-        low = instrument_df['low'].values[0]
-        qty = instrument_df['qty'].values[0]
-        volume = bar['volume']
+        # orb_bars = bars.session(start='19:31', end='19:35')
+        orb_bars = bars[bars.index >= bar_start_time]
+        orb_bars = bars[bars.index < bar_end_time]
 
-        direction = 'NOT KNOWN'
-        if bar['close'] > high and volume > avg_volume:
-            direction = 'BUY'
-        if bar['close'] < low and volume > avg_volume:
-            direction = 'SELL'
+        print("orb_bars:")
+        print(orb_bars[['symbol', 'high', 'low', 'volume']])
 
-        # get position direction
-        if instrument.positions['position'] > 0 and direction == 'BUY':
-            # already buy order in place
-            print('Already BUY order in Place - So not placing order - Symbol :', instrument.symbol, 'Position: ',
-                  str(instrument.positions['position']))
-            pass
+        if len(orb_bars) >= 4:
+            open_candle = orb_bars.iloc[0]
+            second_candle = orb_bars.iloc[1]
+            third_candle = orb_bars.iloc[2]
+            fourth_candle = orb_bars.iloc[3]
 
-        if instrument.positions['position'] < 0 and direction == 'SELL':
-            print('Already SELL order in Place - So not placing order - Symbol :', instrument.symbol, 'Position: ',
-                  str(instrument.positions['position']))
-            pass
+            if ((second_candle.high < open_candle.high and second_candle.low > open_candle.low) and
+                    (third_candle.high < open_candle.high and third_candle.low > open_candle.low) and
+                    (fourth_candle.high < open_candle.high and fourth_candle.low > open_candle.low)):
 
-        if not instrument.pending_orders and instrument.positions["position"] == 0:
-            if direction == 'BUY':
-                print("BUY Signal and No Position - Placing Order")
-                print(instrument.symbol, high, bar_close, low, direction, volume, avg_volume)
-                instrument.order(direction,
-                                 qty,
-                                 limit_price=high,
-                                 initial_stop=low,
-                                 trail_stop_by=0.5,
-                                 target=high + (high - low),
-                                 expiry=14400)
+                print("ORD Condition Matched")
 
-                self.record(ORB_BUY=qty)
-            elif direction == 'SELL':
-                print("Sell Signal and No Position - Placing Order")
-                print(instrument.symbol, high, bar_close, low, direction, volume, avg_volume)
-                instrument.order(direction,
-                                 qty,
-                                 limit_price=low,
-                                 initial_stop=high,
-                                 trail_stop_by=0.5,
-                                 target=low - (high - low),
-                                 expiry=14400)
-                self.record(ORB_SELL=qty)
+                print(orb_bars)
+
+                high = round(open_candle.high, 2)
+                low = round(open_candle.low, 2)
+                qty = int(10000 / ((high + low) / 2))
+                volume = bar['volume']
+                bar_close = bar['close']
+                bar_close = bar['close']
+                volume = bar['volume']
+
+                direction = 'NOT KNOWN'
+                if bar['close'] > high and volume > avg_volume:
+                    direction = 'BUY'
+                if bar['close'] < low and volume > avg_volume:
+                    direction = 'SELL'
+
+                # get position direction
+                if instrument.positions['position'] > 0 and direction == 'BUY':
+                    # already buy order in place
+                    print('Already BUY order in Place - So not placing order - Symbol :', instrument.symbol, 'Position: ',
+                          str(instrument.positions['position']))
+                    pass
+
+                if instrument.positions['position'] < 0 and direction == 'SELL':
+                    print('Already SELL order in Place - So not placing order - Symbol :', instrument.symbol, 'Position: ',
+                          str(instrument.positions['position']))
+                    pass
+
+                if not instrument.pending_orders and instrument.positions["position"] == 0:
+                    if direction == 'BUY':
+                        print("BUY Signal and No Position - Placing Order")
+                        print(instrument.symbol, high, bar_close, low, direction, volume, avg_volume)
+                        instrument.order(direction,
+                                         qty,
+                                         limit_price=high,
+                                         initial_stop=low,
+                                         trail_stop_by=0.5,
+                                         target=high + (high - low),
+                                         expiry=14400)
+
+                        self.record(ORB_BUY=qty)
+                    elif direction == 'SELL':
+                        print("Sell Signal and No Position - Placing Order")
+                        print(instrument.symbol, high, bar_close, low, direction, volume, avg_volume)
+                        instrument.order(direction,
+                                         qty,
+                                         limit_price=low,
+                                         initial_stop=high,
+                                         trail_stop_by=0.5,
+                                         target=low - (high - low),
+                                         expiry=14400)
+                        self.record(ORB_SELL=qty)
 
         # elif instrument.positions['position'] > 0 and direction =='SELL':
         #     print('exiting BUY position - placing new SELL order - Position - ' + str(instrument.positions['position']))
@@ -254,7 +276,6 @@ class TestStrategy(Algo):
 
 # ===========================================
 if __name__ == "__main__":
-
     mk_list = ['uk', 'us']
     print("Available Markets:")
     for i, market in enumerate(mk_list, start=1):
@@ -269,8 +290,11 @@ if __name__ == "__main__":
         except (ValueError, IndexError):
             print('This is not a valid selection. Please enter number between 1 and {}!'.format(i))
 
-    scan_result = market+'_orb_ib_result.csv'
-    file_name = 'sp100.csv'
+    if market == 'uk':
+        file_name = 'ftse.csv'
+    elif market == 'us':
+        file_name = 'sp100.csv'
+
     source = pd.read_csv(file_name, header=None).head(100)
     symbols = list(source.iloc[:,0])
 
@@ -286,26 +310,37 @@ if __name__ == "__main__":
                 bar_time_format)
         elif market == 'us':
             instruments.append((symbol, "STK", "SMART", "USD", "", 0.0, ""))
-            bar_start_time = algo_time.replace(hour=14).replace(minute=30).replace(second=00).strftime(
+            bar_start_time = algo_time.replace(hour=19).replace(minute=31).replace(second=00).strftime(
                 bar_time_format)
-            bar_end_time = algo_time.replace(hour=17).replace(minute=3).replace(second=00).strftime(
+            bar_end_time = algo_time.replace(hour=19).replace(minute=35).replace(second=00).strftime(
                 bar_time_format)
     print(instruments)
     resolution = '1T'
     strategy = TestStrategy(
-        instruments=instruments,
+        instruments=['AAPL'],
         resolution=resolution,
+        preload="5T",
         ibport=7497,
-        ibclient=2555
+        ibclient=2555,
+        timezone='BST'
     )
 
-
-    bars = strategy.get_history('AAPL', bar_start_time, resolution=resolution)
-    print (bars)
-    print(bar_end_time)
+    # bars = strategy.get_history('AAPL', bar_start_time, resolution=resolution)
+    # print('full bars:')
+    # print(bars)
+    #
+    # # orb_bars = bars.session(start='19:31', end='19:35')
+    # orb_bars = bars[bars.index >= bar_start_time]
+    # orb_bars = bars[bars.index < bar_end_time]
+    #
+    # print(orb_bars[['symbol','high','low','volume']])
+    # bars = strategy.get_history('AAPL', bar_start_time, resolution=resolution)
+    #
+    # print (bars)
+    # print(bar_end_time)
     # bars = bars[bars.index >= bar_start_time]
-    bars = bars[bars.index < bar_end_time]
-    print(bars)
+    # bars = bars[bars.index < bar_end_time]
+    # print(bars)
 
     # strategy.get_instrument()
-    # strategy.run()
+    strategy.run()
