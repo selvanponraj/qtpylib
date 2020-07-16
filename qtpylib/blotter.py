@@ -368,13 +368,12 @@ class Blotter():
                 pass
 
         else:
+            tz_utc = datetime.utcfromtimestamp(int(msg.date))
             data = {
                 "symbol": symbol,
                 "symbol_group": tools.gen_symbol_group(symbol),
                 "asset_class": tools.gen_asset_class(symbol),
-                "timestamp": tools.datetime_to_timezone(
-                    datetime.fromtimestamp(int(msg.date)), tz="UTC"
-                ).strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp":tz_utc.strftime("%Y-%m-%d %H:%M:%S"),
             }
 
             # incmoing second data
@@ -394,7 +393,7 @@ class Blotter():
                 data["volume"] = int(msg.volume)
                 data["kind"] = "BAR"
 
-            # print(data)
+            print(data)
 
             # store in db
             self.log2db(data, data["kind"])
@@ -1008,6 +1007,7 @@ class Blotter():
                 query = query.replace('{SYMBOLS}', '","'.join(symbols))
         # --- end build query
 
+        # print("History Query:", query)
         # get data using pandas
         data = pd.read_sql(query, self.dbconn)  # .dropna()
 
